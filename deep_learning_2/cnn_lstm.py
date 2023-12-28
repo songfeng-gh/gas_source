@@ -9,7 +9,6 @@ from torch.utils.data import Dataset
 from time import time
 from torch.optim.lr_scheduler import StepLR
 from sklearn import metrics
-from data.dataset import DataSet
 
 
 class GasDiffusionDataset(Dataset):
@@ -53,12 +52,12 @@ class CNNLSTM(nn.Module):
         super(CNNLSTM, self).__init__()
 
         self.conv1 = nn.Sequential(
-            nn.Conv2d(input_size, 100, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(input_size, 100, kernel_size=3, stride=1),
             nn.BatchNorm2d(100),
         )
 
         self.conv2 = nn.Sequential(
-            nn.Conv2d(100, 50, kernel_size=(20, 10), stride=1),
+            nn.Conv2d(100, 50, kernel_size=(148, 98), stride=1),
             nn.BatchNorm2d(50),
         )
 
@@ -89,15 +88,11 @@ class CNNLSTM(nn.Module):
         x = x[-1]
         x = self.dense(x)
 
-        output = torch.sigmoid(x)
-        return output
-
     # loss_rate kl和BCELoss的比例
     # verify_rate 训练集和验证集的比例
     def train_model(self, train_x, train_y, loss_rate=0.2, verify_rate=0.1, model_path="./model/model.pt",
                     best_path="./model/best_model.pt"):
-        # 归一化或者标准化数据
-        # train_x = DataSet.standardization(train_x)
+        train_x = train_x.reshape(-1, 2, 150, 100)
         # 获取训练集 验证集比例
         index = int((1 - verify_rate) * len(train_x))
         index = math.floor(index / 100) * 100
@@ -175,6 +170,7 @@ class CNNLSTM(nn.Module):
                 loss_kl = criterion_kl(outputs, b_y)
                 loss = (loss_rate * loss_kl + (1 - loss_rate) * loss_bce) / 10
 
+                outputs = outputs.detach().cpu()
                 loss.requires_grad_(True)
                 loss.backward()  # backpropagation, compute gradients
                 optimizer.step()  # apply gradients
@@ -182,57 +178,6 @@ class CNNLSTM(nn.Module):
             if epoch % 10 == 0:
                 print("==============================loss==================================")
                 print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
-                print("==============================训练集==================================")
-                predict_train = self(b_x)
-                predict_train = predict_train.cpu()
-                # 将predict转换到0,1之间
-                zero = torch.zeros_like(predict_train)
-                one = torch.ones_like(predict_train)
-                predict_train = torch.where(predict_train > self.threshold, one, zero)
-                # 训练集混淆矩阵
-                accuracy, recall, precision, f1 = self.test_model(b_y.cpu().detach().numpy(),
-                                                                  predict_train.detach().numpy())
-                print("accuracy:", accuracy, '\n', "precision:", precision, '\n',
-                      "recall:", recall, '\n', "F1 :", f1)
-
-                accuracy_sum, recall_sum, precision_sum, f1_sum, verify_loss_sum = 0, 0, 0, 0, 0
-                best_res = 1e6
-
-                print("===============================验证集=================================")
-                # 模型测试验证集
-                for step, (v_x, v_y) in enumerate(verify_loader):
-                    predict = self(v_x)
-                    # 获取验证集损失
-                    verify_loss_bce = criterion_bce(predict, v_y)
-                    verify_loss_kl = criterion_kl(predict, v_y)
-                    verify_loss = (loss_rate * verify_loss_kl + (1 - loss_rate) * verify_loss_bce) / 10
-                    verify_loss_sum += verify_loss
-
-                    # 将predict放到CPU
-                    predict = predict.cpu()
-
-                    # 将predict转换到0,1之间
-                    zero = torch.zeros_like(predict)
-                    one = torch.ones_like(predict)
-                    predict = torch.where(predict > self.threshold, one, zero)
-
-                    # 验证集混淆矩阵
-                    accuracy, recall, precision, f1 = self.test_model(v_y.cpu().detach().numpy(),
-                                                                      predict.detach().numpy())
-                    accuracy_sum += accuracy
-                    recall_sum += recall
-                    precision_sum += precision
-                    f1_sum += f1
-                accuracy_res = accuracy_sum / len(verify_loader)
-                recall_res = recall_sum / len(verify_loader)
-                precision_res = precision_sum / len(verify_loader)
-                f1_res = f1_sum / len(verify_loader)
-                print("accuracy:", accuracy_res, '\n', "precision:", precision_res, '\n',
-                      "recall:", recall_res, '\n', "F1 :", f1_res)
-                # 是否有更优模型
-                if verify_loss_sum < best_res:
-                    best_res = verify_loss_sum
-                    torch.save(self.state_dict(), best_path)
             scheduler.step()
         end = time()
         print("训练时间为：" + str(end - start) + "秒")

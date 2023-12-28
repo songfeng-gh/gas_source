@@ -1,8 +1,11 @@
+import math
+
 import numpy as np
 import pandas as pd
 import chama
 from utils.Utils import Utils
 from time import time
+import torch
 import matplotlib.pyplot as plt
 
 
@@ -24,7 +27,7 @@ class DataSet():
         source = chama.simulation.Source(22.04, 19.25, 6.21, 10)
 
         # 定义大气条件
-        atm = pd.DataFrame({'Wind Direction': [45, 60],
+        atm = pd.DataFrame({'Wind Direction': [130, 130],
                             'Wind Speed': [1.2, 1],
                             'Stability Class': ['A', 'A']},
                            index=[0, 10])
@@ -94,21 +97,21 @@ class DataSet():
         return res
 
     @staticmethod
-    def produce_data(numbers):
+    def produce_data(numbers, path):
         data = []
         np.random.seed(100)
-        upper = np.array([30, 30, 5, 10])
-        lower = np.array([0, 0, 0, 0])
-        label = np.random.random((numbers, 4)) * (upper - lower) + lower
+        upper = np.array([30, 30, 5, 10, 2.9, 360])
+        lower = np.array([0, 0, 0, 0, 0, 0])
+        label = np.random.random((numbers, 6)) * (upper - lower) + lower
 
         for i in range(0, len(label)):
-            print(f"生成第{i}条数据", i + 1)
+            print(f"生成第{i + 1}条数据", i + 1)
 
             # 定义源
             source = chama.simulation.Source(label[i][0], label[i][1], label[i][2], label[i][3])
             # 定义大气条件
-            atm = pd.DataFrame({'Wind Direction': [45],
-                                'Wind Speed': [2],
+            atm = pd.DataFrame({'Wind Direction': [label[i][5]],
+                                'Wind Speed': [label[i][4]],
                                 'Stability Class': ['A']},
                                index=[0])
             # 获取扩散数据
@@ -119,7 +122,7 @@ class DataSet():
         res = np.concatenate((label, data), axis=1)
         res = pd.DataFrame(res)
 
-        res.to_csv(path_or_buf='../实验数据/data_test.csv', index_label=None)
+        res.to_csv(path_or_buf=path, index_label=None)
 
     @staticmethod
     def read_single_csv(input_path):
@@ -131,12 +134,12 @@ class DataSet():
         return res_df
 
     @staticmethod
-    def read_data():
+    def read_data(path):
         # 读取数据
         start = time()
         # data = pd.read_csv('../实验数据/data.csv')
-        data = DataSet.read_single_csv('../实验数据/data.csv')
-        # data = DataSet.read_single_csv('../实验数据/data_1000.csv')
+        # data = DataSet.read_single_csv('../实验数据/data.csv')
+        data = DataSet.read_single_csv(path)
         end = time()
         print("读取数据时间为：" + str(end - start) + "秒")
 
@@ -145,9 +148,14 @@ class DataSet():
         return data
 
     @staticmethod
-    def split_data(data, threshold=0.7):
-        data_value = data.iloc[:, 5:]
+    def separate_data(data, shift=0):
+        data_value = data.iloc[:, 5 + shift:]
         data_label = data.iloc[:, 0:5]
+        return data_value, data_label
+
+    @staticmethod
+    def split_data(data, threshold=0.7, shift=0):
+        data_value, data_label = DataSet.separate_data(data, shift=shift)
 
         index = int(threshold * len(data))
 
@@ -157,6 +165,19 @@ class DataSet():
         test_data_label = data_label.iloc[index:]
 
         return train_data_value, test_data_value, train_data_label, test_data_label
+
+    @staticmethod
+    def split_train_verify_data(data_value, data_label, verify_rate=0.1):
+        # 获取训练集 验证集比例
+        index = int((1 - verify_rate) * len(data_value))
+        index = math.floor(index / 100) * 100
+        # 分割训练集 验证集
+        train_data_value = data_value[0:index, :]
+        train_data_label = data_label[0:index, :]
+        verify_data_value = data_value[index:, :]
+        verify_data_label = data_label[index:, :]
+
+        return train_data_value, verify_data_value, train_data_label, verify_data_label
 
     @staticmethod
     def handle_data_value(data_value):
@@ -174,9 +195,50 @@ class DataSet():
             res[i][index] = 1
         return res
 
+    @staticmethod
+    def filter_data(data, threshold=0.1, shift=0):
+        # 将所有sum<threshold的数据删除
+        data_sum = data.iloc[:, 5 + shift:].apply(lambda x: x.sum(), axis=1)
+        data = data.drop(data_sum[data_sum < threshold].index)
+        return data
+
+    @staticmethod
+    def numpy_to_tensor(data):
+        data = data.astype(np.float32)
+        data = torch.tensor(data)
+        return data
+
+    @staticmethod
+    def normalization(data):
+        _range = np.max(data) - np.min(data)
+        return (data - np.min(data)) / _range
+
+    @staticmethod
+    def standardization(data):
+        mu = np.mean(data, axis=0)
+        sigma = np.std(data, axis=0)
+        return (data - mu) / sigma
+
 
 if __name__ == '__main__':
-    # DataSet.produce_data(1000)
-    data = DataSet.read_data()
-    train_data_value, test_data_value, train_data_label, test_data_label = DataSet.split_data(data)
-    print(train_data_value)
+    # DataSet.diffusion_trend()
+    # 产生数据
+    data_path = '../实验数据/data_train.csv'
+    DataSet.produce_data(8000, data_path)
+    # 获取训练数据
+    train_data = DataSet.read_data(data_path)
+    train_data = DataSet.filter_data(train_data, shift=2)
+    train_data_value, verify_data_value, train_data_label, verify_data_label = DataSet.split_data(train_data,
+                                                                                                  threshold=0.9,
+                                                                                                  shift=0)
+    print(train_data.shape)
+
+    # # 将数据转为特定格式
+    # train_x = DataSet.handle_data_value(train_data_value)
+    # test_x = DataSet.handle_data_value(verify_data_value)
+    # train_y = DataSet.handle_data_label(train_data_label)
+    # test_y = DataSet.handle_data_label(verify_data_label)
+    # # 获取测试数据
+    # test_data = DataSet.read_data('../实验数据/data_test.csv')
+    # test_data_value, test_data_label = DataSet.separate_data(test_data, shift=2)
+    # print(train_data_value)

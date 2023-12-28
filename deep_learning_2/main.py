@@ -1,3 +1,5 @@
+# 尝试将输入数据变为2*150*100的格式 查看模型效果
+
 import matplotlib.pyplot as plt
 from data.dataset import DataSet
 from cnn_lstm import CNNLSTM as cl
@@ -8,10 +10,11 @@ import warnings
 if __name__ == '__main__':
     warnings.filterwarnings('ignore')
     # 读取数据
-    data = DataSet.read_data('../实验数据/data.csv')
-    # 数据预处理 将所有sum<0.1的数据删除
+    data = DataSet.read_data('../实验数据/data_1000.csv')
+    # 将所有sum<0.1的数据删除
     data_sum = data.iloc[:, 5:].apply(lambda x: x.sum(), axis=1)
     data = data.drop(data_sum[data_sum < 0.1].index)
+
     # 分离数据训练集、测试集
     train_data_value, test_data_value, train_data_label, test_data_label = DataSet.split_data(data)
     # 将数据转为给定格式
@@ -21,22 +24,20 @@ if __name__ == '__main__':
     test_y = DataSet.handle_data_label(test_data_label)
 
     # 创建模型
-    model = cl(input_size=150)
+    model = cl(input_size=2)
     # 训练模型
-    model_path = './model/cnn_lstm_opt_standardization.pt'
-    model_best_path = './model/cnn_lstm_opt_cnn_lstm_opt_standardization_best.pt'
+    model_path = './model/cnn_lstm_opt.pt'
+    model_best_path = './model/cnn_lstm_opt_best.pt'
     model.train_model(train_x, train_y, model_path=model_path, best_path=model_best_path)
 
     # Test the model
-    # 归一化或者标准化数据
-    # test_x = DataSet.standardization(test_x)
     counts_list = []
     for version in np.arange(0, 0.6, 0.6):
         version = round(version, 1)
         # model_path = f'./model/cnn_lstm_best_{version}.pt'
         # 读取模型
         model = cl(input_size=150)
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_best_path))
         model.eval()
 
         test_x = test_x.astype(np.float32)
@@ -82,9 +83,9 @@ if __name__ == '__main__':
         print(counts / len(outputs))
         counts_list.append(counts / len(outputs))
 
-    # plt.figure()
-    # plt.plot(np.arange(0, len(counts_list)), counts_list, label='accuracy')
-    # plt.show()
+    plt.figure()
+    plt.plot(np.arange(0, len(counts_list)), counts_list, label='accuracy')
+    plt.show()
 
     # 画出cnn_lstm之后的outputs
     import collections
