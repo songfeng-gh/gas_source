@@ -9,3 +9,4 @@
 # ignored all csv files
 *.csv
 *.png
+*.pt

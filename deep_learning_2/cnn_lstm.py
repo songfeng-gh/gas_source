@@ -88,6 +88,9 @@ class CNNLSTM(nn.Module):
         x = x[-1]
         x = self.dense(x)
 
+        output = torch.sigmoid(x)
+        return output
+
     # loss_rate kl和BCELoss的比例
     # verify_rate 训练集和验证集的比例
     def train_model(self, train_x, train_y, loss_rate=0.2, verify_rate=0.1, model_path="./model/model.pt",

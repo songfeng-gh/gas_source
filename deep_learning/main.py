@@ -8,7 +8,7 @@ import warnings
 if __name__ == '__main__':
     warnings.filterwarnings('ignore')
     # 读取数据
-    data = DataSet.read_data('../实验数据/data.csv')
+    data = DataSet.read_data('../实验数据/data_1000.csv')
     # 数据预处理 将所有sum<0.1的数据删除
     data_sum = data.iloc[:, 5:].apply(lambda x: x.sum(), axis=1)
     data = data.drop(data_sum[data_sum < 0.1].index)
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     # 训练模型
     model_path = './model/cnn_lstm_opt_standardization.pt'
     model_best_path = './model/cnn_lstm_opt_cnn_lstm_opt_standardization_best.pt'
-    model.train_model(train_x, train_y, model_path=model_path, best_path=model_best_path)
+    # model.train_model(train_x, train_y, model_path=model_path, best_path=model_best_path)
 
     # Test the model
     # 归一化或者标准化数据

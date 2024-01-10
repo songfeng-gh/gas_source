@@ -64,30 +64,39 @@ class DataSet():
     # 气体监测信息转换为待使用的格式
     def process_data(signal):
         res = []
-        for i in np.linspace(0.5, 75, 150):
-            signal_2d = signal.loc[signal["T"] == i]
-            signal_five = signal_2d[0::2]
-            signal_ten = signal_2d[1::2]
+        # for i in np.linspace(0.5, 75, 150):
+        #     signal_2d = signal.loc[signal["T"] == i]
+        #     signal_five = signal_2d[0::2]
+        #     signal_ten = signal_2d[1::2]
+        #
+        #     concentration_five = signal_five["S"].to_numpy()
+        #     concentration_ten = signal_ten["S"].to_numpy()
+        #
+        #     concentration = np.concatenate((concentration_five, concentration_ten), axis=0).reshape(20, 10)
+        #     res.append(concentration)
+        # res = np.array(res).reshape(150, 20, 10)
+        for i in np.arange(4, 16, 4):
+            signal_2d = signal.loc[signal["Z"] == i].reset_index()
+            signal_2d = signal_2d.iloc[64:, :]['S']
 
-            concentration_five = signal_five["S"].to_numpy()
-            concentration_ten = signal_ten["S"].to_numpy()
-
-            concentration = np.concatenate((concentration_five, concentration_ten), axis=0).reshape(20, 10)
-
+            concentration = signal_2d.values.reshape(128, 64)
             res.append(concentration)
-        res = np.array(res).reshape(150, 20, 10)
+        res = np.array(res).reshape(3, 128, 64)
         return res
 
     @staticmethod
     def get_single_data(source, atm):
         # 定义受体网络
-        x_grid = np.array([*range(0, 30, 3)]) + 0.5
-        y_grid = np.array([*range(0, 30, 3)]) + 0.5
-        z_grid = np.array([5, 10])
+        # x_grid = np.array([*range(0, 30, 3)]) + 0.5
+        # y_grid = np.array([*range(0, 30, 3)]) + 0.5
+        # z_grid = np.array([5, 10])
+        x_grid = np.linspace(0, 26.25, 8) + 1.875
+        y_grid = np.linspace(0, 26.25, 8) + 1.875
+        z_grid = np.array([4, 8, 12])
         grid = chama.simulation.Grid(x_grid, y_grid, z_grid)
 
         # 监测tend秒 每t_step秒返回一次数据
-        gauss_puff = chama.simulation.GaussianPuff(grid, source, atm, tpuff=1, tend=75, tstep=0.5)
+        gauss_puff = chama.simulation.GaussianPuff(grid, source, atm, tpuff=1, tend=64, tstep=0.5)
         gauss_puff.run(grid, 0.5)
         signal = gauss_puff.conc
 
@@ -219,26 +228,39 @@ class DataSet():
         sigma = np.std(data, axis=0)
         return (data - mu) / sigma
 
+    @staticmethod
+    def map(data, MIN, MAX):
+        """
+        归一化映射到任意区间
+        :param data: 数据
+        :param MIN: 目标数据最小值
+        :param MAX: 目标数据最小值
+        :return:
+        """
+        d_min = np.max(data)  # 当前数据最大值
+        d_max = np.min(data)  # 当前数据最小值
+        return MIN + (MAX - MIN) / (d_max - d_min) * (data - d_min)
+
 
 if __name__ == '__main__':
     # DataSet.diffusion_trend()
     # 产生数据
-    data_path = '../实验数据/data_train.csv'
-    DataSet.produce_data(8000, data_path)
+    data_path = '../实验数据/data_test.csv'
+    DataSet.produce_data(3000, data_path)
     # 获取训练数据
-    train_data = DataSet.read_data(data_path)
-    train_data = DataSet.filter_data(train_data, shift=2)
-    train_data_value, verify_data_value, train_data_label, verify_data_label = DataSet.split_data(train_data,
-                                                                                                  threshold=0.9,
-                                                                                                  shift=0)
-    print(train_data.shape)
-
+    # train_data = DataSet.read_data(data_path)
+    # train_data = DataSet.filter_data(train_data, shift=2)
+    # train_data_value, verify_data_value, train_data_label, verify_data_label = DataSet.split_data(train_data,
+    #                                                                                               threshold=0.9,
+    #                                                                                               shift=0)
+    # print(train_data.shape)
+    #
     # # 将数据转为特定格式
     # train_x = DataSet.handle_data_value(train_data_value)
     # test_x = DataSet.handle_data_value(verify_data_value)
     # train_y = DataSet.handle_data_label(train_data_label)
     # test_y = DataSet.handle_data_label(verify_data_label)
     # # 获取测试数据
-    # test_data = DataSet.read_data('../实验数据/data_test.csv')
+    # test_data = DataSet.read_data(data_path)
     # test_data_value, test_data_label = DataSet.separate_data(test_data, shift=2)
     # print(train_data_value)
